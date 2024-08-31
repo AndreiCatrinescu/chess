@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use crate::{
-    piece::{self, Piece, PieceColour, PieceType},
+    piece::{Piece, PieceColour, PieceType},
     position::{Move, Position},
 };
 
@@ -23,16 +25,11 @@ enum SquareStatus {
 }
 
 pub struct Board {
-    pieces_in_play: Vec<piece::Piece>,
-    pub board_state: [[Option<Piece>; 9]; 9],
+    pieces_in_play: HashMap<Position, Piece>,
 }
 
 impl Board {
-    pub fn new() -> Board {
-        use piece::Piece;
-        use piece::PieceColour;
-        use piece::PieceType;
-
+    pub fn new() -> Self {
         let back_types: [PieceType; 8] = [
             PieceType::Rook,
             PieceType::Knight,
@@ -44,85 +41,51 @@ impl Board {
             PieceType::Rook,
         ];
 
-        let mut squares: [[Option<Piece>; 9]; 9] = [[None; 9]; 9];
-        let mut pieces: Vec<piece::Piece> = Vec::new();
+        let mut pieces_in_play: HashMap<Position, Piece> = HashMap::new();
 
         for (i, &piece_type) in back_types.iter().enumerate() {
             let special: bool = match piece_type {
                 PieceType::King | PieceType::Rook => true,
                 _ => false,
             };
-            pieces.push(Piece::new(
+
+            let new_white_piece: Piece = Piece::new(
                 piece_type,
                 board_columns::A + i,
                 1,
                 PieceColour::White,
                 special,
-            ));
+            );
 
-            pieces.push(Piece::new(
+            let new_black_piece: Piece = Piece::new(
                 piece_type,
                 board_columns::A + i,
                 8,
                 PieceColour::Black,
                 special,
-            ));
+            );
 
-            squares[1][board_columns::A + i] = Some(Piece::new(
-                piece_type,
-                board_columns::A + i,
-                1,
-                PieceColour::White,
-                special,
-            ));
+            let new_white_position: Position = Position::new(1, board_columns::A + i);
+            let new_black_position: Position = Position::new(8, board_columns::A + i);
 
-            squares[8][board_columns::A + i] = Some(Piece::new(
-                piece_type,
-                board_columns::A + i,
-                8,
-                PieceColour::Black,
-                special,
-            ));
+            pieces_in_play.insert(new_white_position, new_white_piece);
+            pieces_in_play.insert(new_black_position, new_black_piece);
         }
 
         for column in board_columns::A..=board_columns::H {
-            pieces.push(piece::Piece::new(
-                piece::PieceType::Pawn,
-                column,
-                2,
-                piece::PieceColour::White,
-                false,
-            ));
+            let new_white_pawn: Piece =
+                Piece::new(PieceType::Pawn, column, 2, PieceColour::White, false);
+            let new_black_pawn: Piece =
+                Piece::new(PieceType::Pawn, column, 7, PieceColour::Black, false);
 
-            pieces.push(piece::Piece::new(
-                piece::PieceType::Pawn,
-                column,
-                7,
-                piece::PieceColour::Black,
-                false,
-            ));
+            let new_white_position = Position::new(2, column);
+            let new_black_position = Position::new(7, column);
 
-            squares[2][column as usize] = Some(piece::Piece::new(
-                piece::PieceType::Pawn,
-                column,
-                2,
-                piece::PieceColour::White,
-                false,
-            ));
-
-            squares[7][column as usize] = Some(piece::Piece::new(
-                piece::PieceType::Pawn,
-                column,
-                7,
-                piece::PieceColour::Black,
-                false,
-            ));
+            pieces_in_play.insert(new_white_position, new_white_pawn);
+            pieces_in_play.insert(new_black_position, new_black_pawn);
         }
 
-        Board {
-            pieces_in_play: pieces,
-            board_state: squares,
-        }
+        Board { pieces_in_play }
     }
 
     pub fn print(&self) {
@@ -140,7 +103,7 @@ impl Board {
             ascii_graphic.push('|');
 
             for column in 1..=8 {
-                if let Some(p) = self.board_state[row][column] {
+                if let Some(p) = self.pieces_in_play.get(&Position::new(row, column)) {
                     ascii_graphic.push_str(&format!("{} ", p.symbol));
                 } else if (row % 2) + (column % 2) == 1 {
                     ascii_graphic.push_str("  ");
@@ -169,23 +132,14 @@ impl Board {
         println!("{}", ascii_graphic);
     }
 
-    fn index_from_position(&self, position: Position) -> Option<usize> {
-        for (index, piece) in self.pieces_in_play.iter().enumerate() {
-            if piece.position == position {
-                return Some(index);
-            }
-        }
-        None
-    }
-
-    pub fn find_piece_index(
+    pub fn find_moveable_pieces(
         &self,
         piece_type: PieceType,
         colour: PieceColour,
         movement: &Move,
-    ) -> Result<Vec<usize>, &'static str> {
-        let mut piece_indexes: Vec<usize> = Vec::new();
-        for (index, piece) in self.pieces_in_play.iter().enumerate() {
+    ) -> Option<Vec<&Piece>> {
+        let mut pieces: Vec<&Piece> = Vec::new();
+        for piece in self.pieces_in_play.values() {
             if piece.colour != colour || piece.piece_type != piece_type {
                 continue;
             }
@@ -202,33 +156,13 @@ impl Board {
                 continue;
             }
 
-            piece_indexes.push(index);
+            pieces.push(piece);
         }
 
-        if piece_indexes.is_empty() {
-            Err("piece not found")
+        if pieces.is_empty() {
+            None
         } else {
-            Ok(piece_indexes)
-        }
-    }
-
-    fn handle_capture(&mut self, movement: &Move, piece_index: usize) {
-        let captured_piece_index: Option<usize>;
-        let moved_piece: &Piece = &self.pieces_in_play[piece_index];
-        if moved_piece.piece_type == PieceType::Pawn
-            && movement.end_position.column != moved_piece.position.column
-        {
-            captured_piece_index = self.index_from_position(Position::new(
-                moved_piece.position.row,
-                movement.end_position.column,
-            ));
-        } else {
-            captured_piece_index = self.index_from_position(movement.end_position)
-        }
-        if let Some(index) = captured_piece_index {
-            let capture_position: Position = self.pieces_in_play[index].position;
-            self.board_state[capture_position.row][capture_position.column] = None;
-            self.pieces_in_play.remove(index);
+            Some(pieces)
         }
     }
 
@@ -238,52 +172,51 @@ impl Board {
         colour: PieceColour,
         movement: Move,
     ) -> Result<(), &'static str> {
-        let piece_indexes: Vec<usize> = self.find_piece_index(piece_type, colour, &movement)?;
-        let mut found: bool = false;
-        let mut piece_index: usize = 0;
+        let pieces: Vec<&Piece> = match self.find_moveable_pieces(piece_type, colour, &movement) {
+            Some(p) => p,
+            None => return Err("piece not found"),
+        }; // imm
 
-        for index in piece_indexes {
-            let piece: &Piece = &self.pieces_in_play[index];
+        let mut found: bool = false;
+        let mut piece_to_move: &Piece = pieces[0];
+
+        for piece in pieces {
             let moves: Vec<Position> = self.find_moves(piece);
             // TODO add Check validation
-            if moves.contains(&movement.end_position) {
-                if !found {
-                    found = true;
-                    piece_index = index;
-                } else {
-                    return Err("multiple pieces can make this move");
-                }
+            if !moves.contains(&movement.end_position) {
+                continue;
             }
+            if found {
+                return Err("multiple pieces can make this move");
+            }
+            found = true;
+            piece_to_move = piece;
         }
         if found == false {
             return Err("impossible move");
         }
-        let old_position: Position = self.pieces_in_play[piece_index].position;
-        let special: bool = self.pieces_in_play[piece_index].special;
-        self.handle_capture(&movement, piece_index);
-        self.board_state[old_position.row][old_position.column] = None;
-        self.pieces_in_play[piece_index].position = movement.end_position;
-        self.board_state[movement.end_position.row][movement.end_position.column] =
-            Some(Piece::new(
-                piece_type,
-                movement.end_position.column,
-                movement.end_position.row,
-                colour,
-                special,
-            ));
+        let old_position: Position = piece_to_move.position;
 
-        piece_index = self.index_from_position(movement.end_position).unwrap();
-        let moved_piece: &mut Piece = &mut self.pieces_in_play[piece_index];
-        if piece_type != PieceType::Pawn {
-            moved_piece.special = false;
-        } else {
-            if movement.end_position.row - old_position.row == 2
-                && movement.end_position.column == old_position.column
-            {
-                moved_piece.special = true;
+        let mut piece_to_move: Piece = self.pieces_in_play.remove(&old_position).unwrap();
+        piece_to_move.position = movement.end_position;
+
+        self.pieces_in_play
+            .insert(piece_to_move.position, piece_to_move); // handles captures other than en passant automatically
+        self.handle_en_passant(&movement, old_position);
+
+        Ok(())
+    }
+
+    fn handle_en_passant(&mut self, movement: &Move, old_position: Position) {
+        let moved_piece: &Piece = self.pieces_in_play.get(&movement.end_position).unwrap();
+        if let PieceType::Pawn = moved_piece.piece_type {
+            if movement.end_position.column != old_position.column {
+                self.pieces_in_play.remove(&Position::new(
+                    old_position.row,
+                    movement.end_position.column,
+                ));
             }
         }
-        Ok(())
     }
 
     fn find_moves(&self, piece: &Piece) -> Vec<Position> {
@@ -372,6 +305,7 @@ impl Board {
 
     fn find_pawn_moves(&self, moves: &mut Vec<Position>, piece: &Piece) {
         // TODO solve en passant
+        // TODO rewrite maybe
         let mut current_position: Position = piece.position;
         if piece.colour == PieceColour::White {
             current_position.row += 1;
@@ -394,9 +328,8 @@ impl Board {
             back_position.column -= 1;
             side_position.column -= 1;
             if let SquareStatus::Capturable = self.validate_square(side_position, piece.colour) {
-                if let Some(side_piece) = self.board_state[side_position.row][side_position.column]
-                {
-                    if side_piece.piece_type == PieceType::Pawn {
+                if let Some(side_piece) = self.pieces_in_play.get(&side_position) {
+                    if let PieceType::Pawn = side_piece.piece_type {
                         jumped = side_piece.special;
                     }
                 }
@@ -455,7 +388,7 @@ impl Board {
         } else if position.row > 8 || position.row < 1 {
             SquareStatus::OutsideBounds
         } else {
-            match self.board_state[position.row][position.column] {
+            match self.pieces_in_play.get(&position) {
                 Some(piece) => {
                     if piece.colour == ally_colour {
                         SquareStatus::Occupied
