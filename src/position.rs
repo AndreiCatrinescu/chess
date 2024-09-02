@@ -13,6 +13,12 @@ impl Position {
     }
 }
 
+pub enum NotationError {
+    TooLong,
+    TooShort,
+    Invalid,
+}
+
 pub struct Move {
     pub piece_type: PieceType,
     pub end_position: Position,
@@ -35,37 +41,98 @@ impl Move {
         }
     }
 
-    // pub fn from_notation(notation: &str) -> Result<Self, &'static str> {
-    //     let chars: Vec<char> = notation.chars().collect();
-    //     if chars.len() == 2 {
-    //         let column: usize = match chars[0].to_ascii_uppercase() {
-    //             'A' => board_columns::A,
-    //             'B' => board_columns::B,
-    //             'C' => board_columns::C,
-    //             'D' => board_columns::D,
-    //             'E' => board_columns::E,
-    //             'F' => board_columns::F,
-    //             'G' => board_columns::G,
-    //             'H' => board_columns::H,
-    //             _ => return Err("no good"),
-    //         };
-    //         let row: usize = chars[1].to_digit(10).unwrap() as usize;
-    //         return Ok(Move::new(
-    //             Position::new(row, column),
-    //             None,
-    //             None,
-    //             PieceType::Pawn,
-    //         ));
-    //     } else if chars.len() > 2 {
-    //         let piece_type = match chars[0].to_ascii_uppercase() {
-    //             'R' => PieceType::Rook,
-    //             'K' => PieceType::King,
-    //             'N' => PieceType::Knight,
-    //             'Q' => PieceType::Queen,
-    //             'B' => PieceType::Bishop,
-    //             _ => return Err("No good"),
-    //         }
-    //     }
-    //     Ok(Move::new(Position::new(1, 1), None, None, PieceType::King))
-    // }
+    pub fn from_notation(notation: &str) -> Result<Self, NotationError> {
+        let notation_elements: Vec<char> = notation.chars().collect();
+
+        if notation_elements.len() < 2 {
+            return Err(NotationError::TooShort);
+        }
+
+        if notation_elements.len() > 6 {
+            return Err(NotationError::TooLong);
+        }
+
+        let last: usize = notation_elements.len() - 1;
+        let row: usize = match notation_elements[last].to_digit(10) {
+            Some(row) => row as usize,
+            None => return Err(NotationError::Invalid),
+        };
+        let column: usize = match notation_elements[last - 1].to_ascii_uppercase() {
+            'A' => board_columns::A,
+            'B' => board_columns::B,
+            'C' => board_columns::C,
+            'D' => board_columns::D,
+            'E' => board_columns::E,
+            'F' => board_columns::F,
+            'G' => board_columns::G,
+            'H' => board_columns::H,
+            _ => return Err(NotationError::Invalid),
+        };
+        let end_position: Position = Position::new(row, column);
+
+        if notation_elements.len() == 2 {
+            return Ok(Move::new(end_position, None, None, PieceType::Pawn));
+        }
+
+        let piece_type: PieceType = match notation_elements[0].to_ascii_uppercase() {
+            'R' => PieceType::Rook,
+            'B' => PieceType::Bishop,
+            'K' => PieceType::King,
+            'N' => PieceType::Knight,
+            'Q' => PieceType::Queen,
+            _ => return Err(NotationError::Invalid),
+        };
+
+        if notation_elements.len() == 3 {
+            return Ok(Move::new(end_position, None, None, piece_type));
+        }
+
+        if notation_elements.len() == 4 {
+            if notation_elements[1].is_digit(10) {
+                let starting_row: Option<usize> = match notation_elements[1].to_digit(10) {
+                    Some(row) => Some(row as usize),
+                    None => return Err(NotationError::Invalid),
+                };
+                return Ok(Move::new(end_position, None, starting_row, piece_type));
+            } else {
+                let starting_column: Option<usize> = match notation_elements[1].to_ascii_uppercase()
+                {
+                    'A' => Some(board_columns::A),
+                    'B' => Some(board_columns::B),
+                    'C' => Some(board_columns::C),
+                    'D' => Some(board_columns::D),
+                    'E' => Some(board_columns::E),
+                    'F' => Some(board_columns::F),
+                    'G' => Some(board_columns::G),
+                    'H' => Some(board_columns::H),
+                    _ => return Err(NotationError::Invalid),
+                };
+                return Ok(Move::new(end_position, starting_column, None, piece_type));
+            };
+        }
+
+        let starting_column: Option<usize> = match notation_elements[1].to_ascii_uppercase() {
+            'A' => Some(board_columns::A),
+            'B' => Some(board_columns::B),
+            'C' => Some(board_columns::C),
+            'D' => Some(board_columns::D),
+            'E' => Some(board_columns::E),
+            'F' => Some(board_columns::F),
+            'G' => Some(board_columns::G),
+            'H' => Some(board_columns::H),
+            _ => return Err(NotationError::Invalid),
+        };
+
+        let starting_row: Option<usize> = match notation_elements[2].to_digit(10) {
+            Some(row) => Some(row as usize),
+            None => return Err(NotationError::Invalid),
+        };
+
+        Ok(Move::new(
+            end_position,
+            starting_column,
+            starting_row,
+            piece_type,
+        ))
+    }
 }

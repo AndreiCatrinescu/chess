@@ -17,11 +17,11 @@ pub mod board_columns {
     pub const H: usize = 8;
 }
 
-#[allow(dead_code)]
-pub enum MoveError {
+pub enum MoveResult {
+    Success,
+    PromotionAvailable,
     ImpossibleMove,
     Checked,
-    Mated,
     AmbiguousMove,
     MissingPiece,
 }
@@ -190,12 +190,12 @@ impl Board {
         }
     }
 
-    // ? hope it works
-    pub fn is_mate(&mut self, player: PieceColour) -> bool {
+    pub fn is_stalemate(&mut self, player: PieceColour) -> bool {
         let mut moves_to_check: Vec<(Position, Position, PieceType, PieceColour)> = Vec::new();
-        if !self.is_in_check(player) {
+        if self.is_in_check(player) {
             return false;
         }
+
         for piece in self.pieces_in_play.values() {
             if piece.colour != player {
                 continue;
@@ -205,12 +205,59 @@ impl Board {
                 moves_to_check.push((new_position, piece.position, piece.piece_type, piece.colour));
             }
         }
+
+        if moves_to_check.is_empty() {
+            return true;
+        }
+
+        // ! review
         for (new_position, old_position, piece_type, colour) in moves_to_check {
             if self.breaks_check(old_position, new_position, piece_type, colour) {
                 return true;
             }
         }
+
         false
+    }
+
+    // ? hope it works
+    pub fn is_mate(&mut self, player: PieceColour) -> bool {
+        let mut moves_to_check: Vec<(Position, Position, PieceType, PieceColour)> = Vec::new();
+        if !self.is_in_check(player) {
+            return false;
+        }
+
+        for piece in self.pieces_in_play.values() {
+            if piece.colour != player {
+                continue;
+            }
+            let ally_moves: Vec<Position> = self.find_all_ally_moves(player);
+            for new_position in ally_moves {
+                moves_to_check.push((new_position, piece.position, piece.piece_type, piece.colour));
+            }
+        }
+
+        if moves_to_check.is_empty() {
+            return true;
+        }
+
+        for (new_position, old_position, piece_type, colour) in moves_to_check {
+            if self.breaks_check(old_position, new_position, piece_type, colour) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn is_promotion_available(&self, colour: PieceColour, movement: &Move) -> bool {
+        if colour == PieceColour::White && movement.end_position.row == 8 {
+            true
+        } else if colour == PieceColour::Black && movement.end_position.row == 1 {
+            true
+        } else {
+            false
+        }
     }
 
     fn breaks_check(
@@ -268,12 +315,12 @@ impl Board {
         moves
     }
 
-    pub fn make_move(&mut self, colour: PieceColour, movement: &Move) -> Result<(), MoveError> {
+    pub fn make_move(&mut self, colour: PieceColour, movement: &Move) -> MoveResult {
         // finds possible pieces to move
         let pieces: Vec<&Piece> =
             match self.find_moveable_pieces(movement.piece_type, colour, &movement) {
                 Some(p) => p,
-                None => return Err(MoveError::MissingPiece),
+                None => return MoveResult::MissingPiece,
             };
 
         let mut found: bool = false;
@@ -286,14 +333,14 @@ impl Board {
                 continue;
             }
             if found {
-                return Err(MoveError::AmbiguousMove);
+                return MoveResult::AmbiguousMove;
             }
             found = true;
             piece_to_move = piece;
         }
 
         if found == false {
-            return Err(MoveError::ImpossibleMove);
+            return MoveResult::ImpossibleMove;
         }
 
         let old_position: Position = piece_to_move.position;
@@ -311,10 +358,14 @@ impl Board {
         // if in check after move undo the move
         if self.is_in_check(colour) {
             self.undo_move(movement.end_position, old_position, removed_piece);
-            return Err(MoveError::Checked);
+            return MoveResult::Checked;
         }
 
-        Ok(())
+        if self.is_promotion_available(colour, movement) {
+            MoveResult::PromotionAvailable
+        } else {
+            MoveResult::Success
+        }
     }
 
     /// Be sure to check it the moved piece was a pawn!
