@@ -15,7 +15,7 @@ pub enum PieceColour {
     White,
 }
 
-#[derive(Clone, Copy)]
+// #[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub struct Piece {
     pub piece_type: PieceType,
