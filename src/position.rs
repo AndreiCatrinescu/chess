@@ -11,7 +11,7 @@ impl Position {
         Position { row, column }
     }
 }
-
+#[derive(Debug)]
 pub enum NotationError {
     TooLong,
     TooShort,

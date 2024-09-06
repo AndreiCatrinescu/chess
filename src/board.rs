@@ -23,7 +23,7 @@ enum SquareStatus {
     Free,
 }
 
-enum CasleDirection {
+pub enum CastleDirection {
     KingSide,
     QueenSide,
 }
@@ -141,9 +141,19 @@ impl Board {
             && new_position.column != old_position.column
     }
 
-    fn move_was_pawn_jump(&self, new_position: Position, old_position: Position) -> bool {
-        new_position.row == old_position.row + 2
-            && self.pieces_in_play.get(&new_position).unwrap().piece_type == PieceType::Pawn
+    fn move_was_pawn_jump(
+        &self,
+        new_position: Position,
+        old_position: Position,
+        colour: PieceColour,
+    ) -> bool {
+        if colour == PieceColour::White {
+            new_position.row == old_position.row + 2
+                && self.pieces_in_play.get(&new_position).unwrap().piece_type == PieceType::Pawn
+        } else {
+            new_position.row == old_position.row - 2
+                && self.pieces_in_play.get(&new_position).unwrap().piece_type == PieceType::Pawn
+        }
     }
 
     fn find_moveable_pieces(
@@ -195,7 +205,7 @@ impl Board {
         }
     }
 
-    fn is_castle_available(&self, direction: CasleDirection, colour: PieceColour) -> bool {
+    fn is_castle_available(&self, direction: &CastleDirection, colour: PieceColour) -> bool {
         if self.is_in_check(colour) {
             return false;
         }
@@ -208,10 +218,10 @@ impl Board {
 
         //rook is good
         let rook_position: Position = match (&direction, colour) {
-            (CasleDirection::KingSide, PieceColour::White) => Position::new(1, board_columns::H),
-            (CasleDirection::KingSide, PieceColour::Black) => Position::new(8, board_columns::H),
-            (CasleDirection::QueenSide, PieceColour::White) => Position::new(1, board_columns::A),
-            (CasleDirection::QueenSide, PieceColour::Black) => Position::new(8, board_columns::A),
+            (CastleDirection::KingSide, PieceColour::White) => Position::new(1, board_columns::H),
+            (CastleDirection::KingSide, PieceColour::Black) => Position::new(8, board_columns::H),
+            (CastleDirection::QueenSide, PieceColour::White) => Position::new(1, board_columns::A),
+            (CastleDirection::QueenSide, PieceColour::Black) => Position::new(8, board_columns::A),
         };
         if let Some(piece) = self.pieces_in_play.get(&rook_position) {
             if piece.piece_type != PieceType::Rook {
@@ -230,13 +240,13 @@ impl Board {
         };
 
         let first_column: usize = match &direction {
-            CasleDirection::KingSide => king_position.column,
-            CasleDirection::QueenSide => board_columns::A,
+            CastleDirection::KingSide => king_position.column + 1,
+            CastleDirection::QueenSide => board_columns::C,
         };
 
         let last_column: usize = match &direction {
-            CasleDirection::KingSide => board_columns::H,
-            CasleDirection::QueenSide => king_position.column,
+            CastleDirection::KingSide => board_columns::H,
+            CastleDirection::QueenSide => king_position.column,
         };
 
         let enemy_colour: PieceColour = match colour {
@@ -258,7 +268,6 @@ impl Board {
         true
     }
 
-    //TODO add checking for castle
     fn has_valid_move(&mut self, player: PieceColour) -> bool {
         let mut moves_to_check: Vec<(Position, Position, PieceColour)> = Vec::new();
 
@@ -272,8 +281,8 @@ impl Board {
             }
         }
 
-        if self.is_castle_available(CasleDirection::KingSide, player)
-            || self.is_castle_available(CasleDirection::QueenSide, player)
+        if self.is_castle_available(&CastleDirection::KingSide, player)
+            || self.is_castle_available(&CastleDirection::QueenSide, player)
         {
             return true;
         }
@@ -433,7 +442,7 @@ impl Board {
             }
         }
 
-        if self.move_was_pawn_jump(movement.new_position, old_position) {
+        if self.move_was_pawn_jump(movement.new_position, old_position, colour) {
             self.pieces_in_play
                 .get_mut(&movement.new_position)
                 .unwrap()
@@ -450,6 +459,43 @@ impl Board {
         } else {
             MoveResult::Success
         }
+    }
+
+    pub fn castle(&mut self, colour: PieceColour, direction: CastleDirection) -> MoveResult {
+        if !self.is_castle_available(&direction, colour) {
+            return MoveResult::ImpossibleMove;
+        }
+
+        let king_position: Position = self.find_king_position(colour);
+        let rook_position: Position = match (&direction, colour) {
+            (CastleDirection::KingSide, PieceColour::White) => Position::new(1, board_columns::H),
+            (CastleDirection::KingSide, PieceColour::Black) => Position::new(8, board_columns::H),
+            (CastleDirection::QueenSide, PieceColour::White) => Position::new(1, board_columns::A),
+            (CastleDirection::QueenSide, PieceColour::Black) => Position::new(8, board_columns::A),
+        };
+
+        let king_new_position: Position = match &direction {
+            CastleDirection::KingSide => Position::new(king_position.row, king_position.column + 2),
+            CastleDirection::QueenSide => {
+                Position::new(king_position.row, king_position.column - 2)
+            }
+        };
+        let rook_new_position: Position = match &direction {
+            CastleDirection::KingSide => {
+                Position::new(rook_position.row, king_new_position.column - 1)
+            }
+            CastleDirection::QueenSide => {
+                Position::new(rook_position.row, king_new_position.column + 1)
+            }
+        };
+        let mut rook: Piece = self.pieces_in_play.remove(&rook_position).unwrap();
+        let mut king: Piece = self.pieces_in_play.remove(&king_position).unwrap();
+        king.special = false;
+        rook.special = false;
+        self.pieces_in_play.insert(king_new_position, king);
+        self.pieces_in_play.insert(rook_new_position, rook);
+
+        MoveResult::Success
     }
 
     /// Be sure to check it the moved piece was a pawn!
@@ -555,62 +601,128 @@ impl Board {
         }
     }
 
-    fn find_pawn_moves(&self, moves: &mut Vec<Position>, piece: &Piece) {
-        // TODO solve en passant
-        // TODO rewrite maybe
-        let mut current_position: Position = piece.position;
-        if piece.colour == PieceColour::White {
-            current_position.row += 1;
-            if let SquareStatus::Free = self.validate_square(current_position, piece.colour) {
-                // One step up
-                moves.push(current_position);
-            }
-            if piece.position.row == 2 {
-                // Two steps up
-                current_position.row += 1;
-                if let SquareStatus::Free = self.validate_square(current_position, piece.colour) {
-                    moves.push(current_position);
-                }
-            }
-            let mut jumped: bool = false;
-            // En passant left
-            let mut back_position: Position = piece.position;
-            let mut side_position: Position = piece.position;
-            back_position.row += 1;
-            back_position.column -= 1;
-            side_position.column -= 1;
-            if let SquareStatus::Capturable = self.validate_square(side_position, piece.colour) {
-                if let Some(side_piece) = self.pieces_in_play.get(&side_position) {
-                    if let PieceType::Pawn = side_piece.piece_type {
-                        jumped = side_piece.special;
-                    }
-                }
+    fn pawn_has_en_passant_left(&self, pawn: &Piece, step: i32) -> bool {
+        if pawn.colour == PieceColour::White && pawn.position.column == board_columns::A {
+            return false;
+        } else if pawn.colour == PieceColour::Black && pawn.position.column == board_columns::H {
+            return false;
+        }
+
+        let left_position: Position = Position::new(pawn.position.row, pawn.position.column - 1);
+        let back_position: Position = Position::new(
+            (pawn.position.row as i32 + step) as usize,
+            left_position.column,
+        );
+
+        match self.validate_square(back_position, pawn.colour) {
+            SquareStatus::Free => (),
+            _ => return false,
+        }
+
+        if let Some(piece) = self.pieces_in_play.get(&left_position) {
+            if piece.piece_type != PieceType::Pawn {
+                return false;
             }
 
-            if let SquareStatus::Free = self.validate_square(back_position, piece.colour) {
-                if jumped {
-                    moves.push(back_position);
-                }
+            if piece.special == false {
+                return false;
             }
-            // En passant right
-            back_position = piece.position;
-            back_position.row += 1;
-            back_position.column += 1;
-            side_position = piece.position;
-            side_position.column += 1;
         } else {
-            current_position.row -= 1;
-            if let SquareStatus::Free = self.validate_square(current_position, piece.colour) {
-                // One step down
-                moves.push(current_position);
+            return false;
+        }
+
+        true
+    }
+
+    fn pawn_has_en_passant_right(&self, pawn: &Piece, step: i32) -> bool {
+        if pawn.colour == PieceColour::White && pawn.position.column == board_columns::H {
+            return false;
+        } else if pawn.colour == PieceColour::Black && pawn.position.column == board_columns::A {
+            return false;
+        }
+        let right_position: Position = Position::new(pawn.position.row, pawn.position.column + 1);
+        let back_position: Position = Position::new(
+            (pawn.position.row as i32 + step) as usize,
+            right_position.column,
+        );
+
+        match self.validate_square(back_position, pawn.colour) {
+            SquareStatus::Free => (),
+            _ => return false,
+        }
+
+        if let Some(piece) = self.pieces_in_play.get(&right_position) {
+            if piece.piece_type != PieceType::Pawn {
+                return false;
             }
-            if piece.position.row == 7 {
-                // Two steps down
-                current_position.row -= 1;
-                if let SquareStatus::Free = self.validate_square(current_position, piece.colour) {
-                    moves.push(current_position);
-                }
+
+            if piece.special == false {
+                return false;
             }
+        } else {
+            return false;
+        }
+
+        true
+    }
+
+    fn pawn_has_jump(&self, pawn: &Piece) -> bool {
+        if pawn.colour == PieceColour::White && pawn.position.row == 2 {
+            if let SquareStatus::Free = self.validate_square(
+                Position::new(pawn.position.row + 2, pawn.position.column),
+                pawn.colour,
+            ) {
+                return true;
+            }
+        } else if pawn.colour == PieceColour::Black && pawn.position.row == 7 {
+            if let SquareStatus::Free = self.validate_square(
+                Position::new(pawn.position.row - 2, pawn.position.column),
+                pawn.colour,
+            ) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn find_pawn_moves(&self, moves: &mut Vec<Position>, piece: &Piece) {
+        // TODO refactor en passant functions into one
+        let mut current_position: Position = piece.position;
+        match (current_position.row, piece.colour) {
+            (8, PieceColour::White) => return,
+            (1, PieceColour::Black) => return,
+            _ => (),
+        };
+
+        let step: i32 = match &piece.colour {
+            PieceColour::White => 1,
+            PieceColour::Black => -1,
+        };
+        current_position.row = (current_position.row as i32 + step) as usize;
+        if let SquareStatus::Free = self.validate_square(current_position, piece.colour) {
+            moves.push(current_position);
+        }
+
+        if self.pawn_has_jump(piece) {
+            current_position.row = (current_position.row as i32 + step) as usize;
+            moves.push(current_position);
+        }
+
+        if self.pawn_has_en_passant_left(piece, step) {
+            let back_position: Position = Position::new(
+                (piece.position.row as i32 + step) as usize,
+                piece.position.column - 1,
+            );
+            moves.push(back_position);
+        }
+
+        if self.pawn_has_en_passant_right(piece, step) {
+            let back_position: Position = Position::new(
+                (piece.position.row as i32 + step) as usize,
+                piece.position.column + 1,
+            );
+            moves.push(back_position);
         }
     }
 
@@ -651,5 +763,10 @@ impl Board {
                 None => SquareStatus::Free,
             }
         }
+    }
+
+    pub fn promote(&mut self, position: Position, colour: PieceColour, piece_type: PieceType) {
+        let new_piece: Piece = Piece::new(piece_type, position.column, position.row, colour, false);
+        self.pieces_in_play.insert(position, new_piece);
     }
 }
