@@ -1,7 +1,7 @@
 use crate::{
     board::{Board, CastleDirection},
-    piece::PieceColour,
-    position::{Move, MoveResult},
+    piece::{PieceColour, PieceType},
+    position::{Move, MoveResult, Position},
 };
 use std::io;
 pub struct GameManager {
@@ -43,11 +43,18 @@ impl GameManager {
                     }
                 };
                 move_result = self.board.make_move(self.turn, &movement);
+
+                if let MoveResult::PromotionAvailable = move_result {
+                    println!("promotion available");
+                    self.halde_promotion(self.turn, movement.new_position);
+                }
             }
+
             if self.board.is_mate(self.turn) {
                 println!("mate");
                 break;
             }
+
             match move_result {
                 MoveResult::AmbiguousMove => {
                     println!("multiple pieces can make this move, consider specifying the starting row or column");
@@ -65,11 +72,7 @@ impl GameManager {
                     println!("no piece can make this move");
                     continue;
                 }
-                MoveResult::PromotionAvailable => {
-                    println!("promotion available");
-                    continue;
-                }
-                MoveResult::Success => (),
+                MoveResult::Success | MoveResult::PromotionAvailable => (),
             }
 
             self.turn = match &self.turn {
@@ -78,6 +81,29 @@ impl GameManager {
             };
 
             self.board.print();
+        }
+    }
+
+    fn halde_promotion(&mut self, turn: PieceColour, position: Position) {
+        println!("choose piece to promote to:");
+        let input: io::Stdin = io::stdin();
+        let mut piece_string: String = String::new();
+        loop {
+            input.read_line(&mut piece_string).unwrap();
+            piece_string = piece_string.to_ascii_lowercase();
+            let piece_symbol: char = piece_string.chars().nth(0).unwrap();
+            let piece_type: PieceType = match piece_symbol {
+                'r' => PieceType::Rook,
+                'q' => PieceType::Queen,
+                'n' | 'k' => PieceType::Knight,
+                'b' => PieceType::Bishop,
+                _ => {
+                    println!("no :)");
+                    continue;
+                }
+            };
+            self.board.promote(position, turn, piece_type);
+            return;
         }
     }
 }
