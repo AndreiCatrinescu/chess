@@ -275,7 +275,7 @@ impl Board {
             if piece.colour != player {
                 continue;
             }
-            let ally_moves: Vec<Position> = self.find_all_moves(player);
+            let ally_moves: Vec<Position> = self.find_moves(piece);
             for new_position in ally_moves {
                 moves_to_check.push((new_position, piece.position, piece.colour));
             }
@@ -344,9 +344,8 @@ impl Board {
         let mut valid: bool = true;
         let mut piece_to_move: Piece = self.pieces_in_play.remove(&old_position).unwrap();
         piece_to_move.position = new_position;
-        let mut removed_piece: Option<Piece> = self
-            .pieces_in_play
-            .insert(piece_to_move.position, piece_to_move);
+        let mut removed_piece: Option<Piece> =
+            self.pieces_in_play.insert(new_position, piece_to_move);
         if self.move_was_en_passant(new_position, old_position) {
             removed_piece = self.handle_en_passant(new_position, old_position);
         }

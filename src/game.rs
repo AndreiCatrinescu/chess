@@ -50,11 +50,6 @@ impl GameManager {
                 }
             }
 
-            if self.board.is_mate(self.turn) {
-                println!("mate");
-                break;
-            }
-
             match move_result {
                 MoveResult::AmbiguousMove => {
                     println!("multiple pieces can make this move, consider specifying the starting row or column");
@@ -79,6 +74,12 @@ impl GameManager {
                 PieceColour::Black => PieceColour::White,
                 PieceColour::White => PieceColour::Black,
             };
+
+            if self.board.is_mate(self.turn) {
+                self.board.print();
+                println!("mate");
+                break;
+            }
 
             self.board.print();
         }
