@@ -1,14 +1,13 @@
 use crate::{board::board_columns, piece::PieceType};
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
-#[allow(dead_code)]
 pub struct Position {
     pub row: usize,
     pub column: usize,
 }
 
 impl Position {
-    pub fn new(row: usize, column: usize) -> Position {
+    pub fn new(row: usize, column: usize) -> Self {
         Position { row, column }
     }
 }
@@ -21,21 +20,21 @@ pub enum NotationError {
 
 pub struct Move {
     pub piece_type: PieceType,
-    pub end_position: Position,
+    pub new_position: Position,
     pub starting_column: Option<usize>,
     pub starting_row: Option<usize>,
 }
 
 impl Move {
     pub fn new(
-        end_position: Position,
+        new_position: Position,
         starting_column: Option<usize>,
         starting_row: Option<usize>,
         piece_type: PieceType,
     ) -> Self {
         Move {
             piece_type,
-            end_position,
+            new_position,
             starting_column,
             starting_row,
         }
@@ -135,4 +134,13 @@ impl Move {
             piece_type,
         ))
     }
+}
+
+pub enum MoveResult {
+    Success,
+    PromotionAvailable,
+    ImpossibleMove,
+    Checked,
+    AmbiguousMove,
+    MissingPiece,
 }

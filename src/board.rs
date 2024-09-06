@@ -2,10 +2,9 @@ use std::collections::HashMap;
 
 use crate::{
     piece::{Piece, PieceColour, PieceType},
-    position::{Move, Position},
+    position::{Move, MoveResult, Position},
 };
 
-#[allow(dead_code)]
 pub mod board_columns {
     pub const A: usize = 1;
     pub const B: usize = 2;
@@ -17,20 +16,16 @@ pub mod board_columns {
     pub const H: usize = 8;
 }
 
-pub enum MoveResult {
-    Success,
-    PromotionAvailable,
-    ImpossibleMove,
-    Checked,
-    AmbiguousMove,
-    MissingPiece,
-}
-
 enum SquareStatus {
     Occupied,
     OutsideBounds,
     Capturable,
     Free,
+}
+
+enum CasleDirection {
+    KingSide,
+    QueenSide,
 }
 
 pub struct Board {
@@ -141,6 +136,16 @@ impl Board {
         println!("{}", ascii_graphic);
     }
 
+    fn move_was_en_passant(&self, new_position: Position, old_position: Position) -> bool {
+        self.pieces_in_play.get(&new_position).unwrap().piece_type == PieceType::Pawn
+            && new_position.column != old_position.column
+    }
+
+    fn move_was_pawn_jump(&self, new_position: Position, old_position: Position) -> bool {
+        new_position.row == old_position.row + 2
+            && self.pieces_in_play.get(&new_position).unwrap().piece_type == PieceType::Pawn
+    }
+
     fn find_moveable_pieces(
         &self,
         piece_type: PieceType,
@@ -190,81 +195,141 @@ impl Board {
         }
     }
 
+    fn is_castle_available(&self, direction: CasleDirection, colour: PieceColour) -> bool {
+        if self.is_in_check(colour) {
+            return false;
+        }
+
+        // king is good
+        let king_position: Position = self.find_king_position(colour);
+        if self.pieces_in_play.get(&king_position).unwrap().special == false {
+            return false;
+        }
+
+        //rook is good
+        let rook_position: Position = match (&direction, colour) {
+            (CasleDirection::KingSide, PieceColour::White) => Position::new(1, board_columns::H),
+            (CasleDirection::KingSide, PieceColour::Black) => Position::new(8, board_columns::H),
+            (CasleDirection::QueenSide, PieceColour::White) => Position::new(1, board_columns::A),
+            (CasleDirection::QueenSide, PieceColour::Black) => Position::new(8, board_columns::A),
+        };
+        if let Some(piece) = self.pieces_in_play.get(&rook_position) {
+            if piece.piece_type != PieceType::Rook {
+                return false;
+            }
+            if piece.special == false {
+                return false;
+            }
+        } else {
+            return false;
+        }
+
+        let row: usize = match colour {
+            PieceColour::White => 1,
+            PieceColour::Black => 8,
+        };
+
+        let first_column: usize = match &direction {
+            CasleDirection::KingSide => king_position.column,
+            CasleDirection::QueenSide => board_columns::A,
+        };
+
+        let last_column: usize = match &direction {
+            CasleDirection::KingSide => board_columns::H,
+            CasleDirection::QueenSide => king_position.column,
+        };
+
+        let enemy_colour: PieceColour = match colour {
+            PieceColour::Black => PieceColour::White,
+            PieceColour::White => PieceColour::Black,
+        };
+
+        let moves: Vec<Position> = self.find_all_moves(enemy_colour);
+
+        for column in first_column + 1..last_column {
+            if let Some(_) = self.pieces_in_play.get(&Position::new(row, column)) {
+                return false;
+            }
+
+            if moves.contains(&Position::new(row, column)) {
+                return false;
+            }
+        }
+        true
+    }
+
+    //TODO add checking for castle
+    fn has_valid_move(&mut self, player: PieceColour) -> bool {
+        let mut moves_to_check: Vec<(Position, Position, PieceColour)> = Vec::new();
+
+        for piece in self.pieces_in_play.values() {
+            if piece.colour != player {
+                continue;
+            }
+            let ally_moves: Vec<Position> = self.find_all_moves(player);
+            for new_position in ally_moves {
+                moves_to_check.push((new_position, piece.position, piece.colour));
+            }
+        }
+
+        if self.is_castle_available(CasleDirection::KingSide, player)
+            || self.is_castle_available(CasleDirection::QueenSide, player)
+        {
+            return true;
+        }
+
+        if moves_to_check.is_empty() {
+            return false;
+        }
+
+        for (new_position, old_position, colour) in moves_to_check {
+            if self.move_can_be_played(old_position, new_position, colour) {
+                return true;
+            }
+        }
+
+        false
+    }
+
     pub fn is_stalemate(&mut self, player: PieceColour) -> bool {
-        let mut moves_to_check: Vec<(Position, Position, PieceType, PieceColour)> = Vec::new();
         if self.is_in_check(player) {
             return false;
         }
 
-        for piece in self.pieces_in_play.values() {
-            if piece.colour != player {
-                continue;
-            }
-            let ally_moves: Vec<Position> = self.find_all_ally_moves(player);
-            for new_position in ally_moves {
-                moves_to_check.push((new_position, piece.position, piece.piece_type, piece.colour));
-            }
+        if self.has_valid_move(player) {
+            return false;
         }
 
-        if moves_to_check.is_empty() {
-            return true;
-        }
-
-        // ! review
-        for (new_position, old_position, piece_type, colour) in moves_to_check {
-            if self.breaks_check(old_position, new_position, piece_type, colour) {
-                return true;
-            }
-        }
-
-        false
+        true
     }
 
     // ? hope it works
     pub fn is_mate(&mut self, player: PieceColour) -> bool {
-        let mut moves_to_check: Vec<(Position, Position, PieceType, PieceColour)> = Vec::new();
         if !self.is_in_check(player) {
             return false;
         }
 
-        for piece in self.pieces_in_play.values() {
-            if piece.colour != player {
-                continue;
-            }
-            let ally_moves: Vec<Position> = self.find_all_ally_moves(player);
-            for new_position in ally_moves {
-                moves_to_check.push((new_position, piece.position, piece.piece_type, piece.colour));
-            }
+        if self.has_valid_move(player) {
+            return false;
         }
 
-        if moves_to_check.is_empty() {
-            return true;
-        }
-
-        for (new_position, old_position, piece_type, colour) in moves_to_check {
-            if self.breaks_check(old_position, new_position, piece_type, colour) {
-                return true;
-            }
-        }
-
-        false
+        true
     }
 
     pub fn is_promotion_available(&self, colour: PieceColour, movement: &Move) -> bool {
-        if colour == PieceColour::White && movement.end_position.row == 8 {
+        if colour == PieceColour::White && movement.new_position.row == 8 {
             true
-        } else if colour == PieceColour::Black && movement.end_position.row == 1 {
+        } else if colour == PieceColour::Black && movement.new_position.row == 1 {
             true
         } else {
             false
         }
     }
 
-    fn breaks_check(
+    fn move_can_be_played(
         &mut self,
         old_position: Position,
         new_position: Position,
-        piece_type: PieceType,
         colour: PieceColour,
     ) -> bool {
         let mut valid: bool = true;
@@ -273,7 +338,7 @@ impl Board {
         let mut removed_piece: Option<Piece> = self
             .pieces_in_play
             .insert(piece_to_move.position, piece_to_move);
-        if let PieceType::Pawn = piece_type {
+        if self.move_was_en_passant(new_position, old_position) {
             removed_piece = self.handle_en_passant(new_position, old_position);
         }
         if self.is_in_check(colour) {
@@ -283,10 +348,10 @@ impl Board {
         valid
     }
 
-    fn find_ally_king_position(&self, ally_colour: PieceColour) -> Position {
+    fn find_king_position(&self, colour: PieceColour) -> Position {
         let mut king_position: Position = Position::new(0, 0);
         for piece in self.pieces_in_play.values() {
-            if piece.colour == ally_colour && piece.piece_type == PieceType::King {
+            if piece.colour == colour && piece.piece_type == PieceType::King {
                 king_position = piece.position;
             }
         }
@@ -294,20 +359,20 @@ impl Board {
     }
 
     fn is_in_check(&self, player: PieceColour) -> bool {
-        let king_position: Position = self.find_ally_king_position(player);
+        let king_position: Position = self.find_king_position(player);
         let enemy_colour: PieceColour = match player {
             PieceColour::Black => PieceColour::White,
             PieceColour::White => PieceColour::Black,
         };
-        let enemy_moves: Vec<Position> = self.find_all_ally_moves(enemy_colour);
+        let enemy_moves: Vec<Position> = self.find_all_moves(enemy_colour);
 
         enemy_moves.contains(&king_position)
     }
 
-    fn find_all_ally_moves(&self, ally: PieceColour) -> Vec<Position> {
+    fn find_all_moves(&self, colour: PieceColour) -> Vec<Position> {
         let mut moves: Vec<Position> = Vec::new();
         for piece in self.pieces_in_play.values() {
-            if piece.colour == ally {
+            if piece.colour == colour {
                 let new_moves = self.find_moves(piece);
                 moves.extend(new_moves);
             }
@@ -329,7 +394,7 @@ impl Board {
         // checks if exactly one piece can be moved and gets that piece
         for piece in pieces {
             let moves: Vec<Position> = self.find_moves(piece);
-            if !moves.contains(&movement.end_position) {
+            if !moves.contains(&movement.new_position) {
                 continue;
             }
             if found {
@@ -347,18 +412,37 @@ impl Board {
         // pulls piece from its old position
         let mut piece_to_move: Piece = self.pieces_in_play.remove(&old_position).unwrap();
         // update its position
-        piece_to_move.position = movement.end_position;
+        piece_to_move.position = movement.new_position;
         // get the captured piece if any and puts piece on teh new position
         let mut removed_piece: Option<Piece> = self
             .pieces_in_play
             .insert(piece_to_move.position, piece_to_move);
-        if let PieceType::Pawn = movement.piece_type {
-            removed_piece = self.handle_en_passant(movement.end_position, old_position);
+        if self.move_was_en_passant(movement.new_position, old_position) {
+            removed_piece = self.handle_en_passant(movement.new_position, old_position);
         }
         // if in check after move undo the move
         if self.is_in_check(colour) {
-            self.undo_move(movement.end_position, old_position, removed_piece);
+            self.undo_move(movement.new_position, old_position, removed_piece);
             return MoveResult::Checked;
+        }
+
+        // en passant no longer available
+        for piece in self.pieces_in_play.values_mut() {
+            if piece.piece_type == PieceType::Pawn {
+                piece.special = false;
+            }
+        }
+
+        if self.move_was_pawn_jump(movement.new_position, old_position) {
+            self.pieces_in_play
+                .get_mut(&movement.new_position)
+                .unwrap()
+                .special = true;
+        } else {
+            self.pieces_in_play
+                .get_mut(&movement.new_position)
+                .unwrap()
+                .special = false;
         }
 
         if self.is_promotion_available(colour, movement) {
@@ -375,14 +459,14 @@ impl Board {
     /// Returns the captured pawn.
     fn handle_en_passant(
         &mut self,
-        end_position: Position,
+        new_position: Position,
         old_position: Position,
     ) -> Option<Piece> {
         let mut captured_pawn: Option<Piece> = None;
-        if end_position.column != old_position.column {
+        if new_position.column != old_position.column {
             captured_pawn = self
                 .pieces_in_play
-                .remove(&Position::new(old_position.row, end_position.column));
+                .remove(&Position::new(old_position.row, new_position.column));
         }
         captured_pawn
     }
