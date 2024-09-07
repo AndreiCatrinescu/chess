@@ -708,20 +708,38 @@ impl Board {
             moves.push(current_position);
         }
 
+        let back_left_position = Position::new(
+            (piece.position.row as i32 + step) as usize,
+            piece.position.column - 1,
+        );
+
+        let back_right_position: Position = Position::new(
+            (piece.position.row as i32 + step) as usize,
+            piece.position.column + 1,
+        );
+
         if self.pawn_has_en_passant_left(piece, step) {
-            let back_position: Position = Position::new(
-                (piece.position.row as i32 + step) as usize,
-                piece.position.column - 1,
-            );
-            moves.push(back_position);
+            // let back_position: Position = Position::new(
+            //     (piece.position.row as i32 + step) as usize,
+            //     piece.position.column - 1,
+            // );
+            moves.push(back_left_position);
         }
 
         if self.pawn_has_en_passant_right(piece, step) {
-            let back_position: Position = Position::new(
-                (piece.position.row as i32 + step) as usize,
-                piece.position.column + 1,
-            );
-            moves.push(back_position);
+            // let back_position: Position = Position::new(
+            //     (piece.position.row as i32 + step) as usize,
+            //     piece.position.column + 1,
+            // );
+            moves.push(back_right_position);
+        }
+
+        if let SquareStatus::Capturable = self.validate_square(back_left_position, piece.colour) {
+            moves.push(back_left_position);
+        }
+
+        if let SquareStatus::Capturable = self.validate_square(back_right_position, piece.colour) {
+            moves.push(back_right_position);
         }
     }
 
