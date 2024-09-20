@@ -11,12 +11,7 @@ impl Position {
         Position { row, column }
     }
 }
-#[derive(Debug)]
-pub enum NotationError {
-    TooLong,
-    TooShort,
-    Invalid,
-}
+pub struct NotationError;
 
 pub struct Move {
     pub piece_type: PieceType,
@@ -44,17 +39,17 @@ impl Move {
         let notation_elements: Vec<char> = notation.chars().collect();
 
         if notation_elements.len() < 2 {
-            return Err(NotationError::TooShort);
+            return Err(NotationError);
         }
 
         if notation_elements.len() > 6 {
-            return Err(NotationError::TooLong);
+            return Err(NotationError);
         }
 
         let last: usize = notation_elements.len() - 1;
         let row: usize = match notation_elements[last].to_digit(10) {
             Some(row) => row as usize,
-            None => return Err(NotationError::Invalid),
+            None => return Err(NotationError),
         };
         let column: usize = match notation_elements[last - 1].to_ascii_uppercase() {
             'A' => board_columns::A,
@@ -65,7 +60,7 @@ impl Move {
             'F' => board_columns::F,
             'G' => board_columns::G,
             'H' => board_columns::H,
-            _ => return Err(NotationError::Invalid),
+            _ => return Err(NotationError),
         };
         let end_position: Position = Position::new(row, column);
 
@@ -80,7 +75,7 @@ impl Move {
             'N' => PieceType::Knight,
             'Q' => PieceType::Queen,
             'a'..'h' => PieceType::Pawn,
-            _ => return Err(NotationError::Invalid),
+            _ => return Err(NotationError),
         };
 
         if notation_elements.len() == 3 {
@@ -96,7 +91,7 @@ impl Move {
                     'f' => Some(board_columns::F),
                     'g' => Some(board_columns::G),
                     'h' => Some(board_columns::H),
-                    _ => return Err(NotationError::Invalid),
+                    _ => return Err(NotationError),
                 };
                 return Ok(Move::new(end_position, starting_column, None, piece_type));
             }
@@ -106,7 +101,7 @@ impl Move {
             if notation_elements[1].is_digit(10) {
                 let starting_row: Option<usize> = match notation_elements[1].to_digit(10) {
                     Some(row) => Some(row as usize),
-                    None => return Err(NotationError::Invalid),
+                    None => return Err(NotationError),
                 };
                 return Ok(Move::new(end_position, None, starting_row, piece_type));
             } else {
@@ -120,7 +115,7 @@ impl Move {
                     'F' => Some(board_columns::F),
                     'G' => Some(board_columns::G),
                     'H' => Some(board_columns::H),
-                    _ => return Err(NotationError::Invalid),
+                    _ => return Err(NotationError),
                 };
                 return Ok(Move::new(end_position, starting_column, None, piece_type));
             };
@@ -135,12 +130,12 @@ impl Move {
             'F' => Some(board_columns::F),
             'G' => Some(board_columns::G),
             'H' => Some(board_columns::H),
-            _ => return Err(NotationError::Invalid),
+            _ => return Err(NotationError),
         };
 
         let starting_row: Option<usize> = match notation_elements[2].to_digit(10) {
             Some(row) => Some(row as usize),
-            None => return Err(NotationError::Invalid),
+            None => return Err(NotationError),
         };
 
         Ok(Move::new(
