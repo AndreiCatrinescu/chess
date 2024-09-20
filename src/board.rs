@@ -33,6 +33,12 @@ pub struct Board {
 }
 
 impl Board {
+    pub fn test_positions(&self) {
+        for (pos, piece) in &self.pieces_in_play {
+            assert_eq!(*pos, piece.position);
+        }
+    }
+
     pub fn new() -> Self {
         let back_types: [PieceType; 8] = [
             PieceType::Rook,
@@ -136,19 +142,33 @@ impl Board {
         println!("\n{}", ascii_graphic);
     }
 
-    fn move_was_en_passant(&self, new_position: Position, old_position: Position) -> bool {
-        self.pieces_in_play.get(&new_position).unwrap().piece_type == PieceType::Pawn
-            && new_position.column != old_position.column
-            && self
-                .pieces_in_play
-                .get(&Position::new(old_position.row, new_position.column))
-                .unwrap()
-                .colour
-                != self.pieces_in_play.get(&new_position).unwrap().colour
-            && self.validate_square(
-                Position::new(old_position.row, new_position.column),
-                PieceColour::Black,
-            ) == SquareStatus::Free
+    fn move_was_en_passant(
+        &self,
+        new_position: Position,
+        old_position: Position,
+        removed_piece: &Option<Piece>,
+    ) -> bool {
+        if let Some(_) = removed_piece {
+            return false;
+        }
+        if self.pieces_in_play.get(&new_position).unwrap().piece_type != PieceType::Pawn {
+            return false;
+        }
+        if new_position.column == old_position.column {
+            return false;
+        }
+
+        true
+        // self.validate_square(
+        //     Position::new(old_position.row, new_position.column),
+        //     self.pieces_in_play.get(&new_position).unwrap().colour,
+        // ) == SquareStatus::Capturable
+        //     || self
+        //         .pieces_in_play
+        //         .get(&Position::new(old_position.row, new_position.column))
+        //         .unwrap()
+        //         .colour
+        //         != self.pieces_in_play.get(&new_position).unwrap().colour
     }
 
     fn move_was_pawn_jump(
@@ -222,6 +242,9 @@ impl Board {
 
         // king is good
         let king_position: Position = self.find_king_position(colour);
+        if let None = self.pieces_in_play.get(&king_position) {
+            panic!("{:?}", king_position);
+        }
         if self.pieces_in_play.get(&king_position).unwrap().special == false {
             return false;
         }
@@ -336,7 +359,15 @@ impl Board {
     }
 
     pub fn is_promotion_available(&self, colour: PieceColour, movement: &Move) -> bool {
-        if colour == PieceColour::White && movement.new_position.row == 8 {
+        if self
+            .pieces_in_play
+            .get(&movement.new_position)
+            .unwrap()
+            .piece_type
+            != PieceType::Pawn
+        {
+            false
+        } else if colour == PieceColour::White && movement.new_position.row == 8 {
             true
         } else if colour == PieceColour::Black && movement.new_position.row == 1 {
             true
@@ -356,7 +387,7 @@ impl Board {
         piece_to_move.position = new_position;
         let mut removed_piece: Option<Piece> =
             self.pieces_in_play.insert(new_position, piece_to_move);
-        if self.move_was_en_passant(new_position, old_position) {
+        if self.move_was_en_passant(new_position, old_position, &removed_piece) {
             removed_piece = self.handle_en_passant(new_position, old_position);
         }
         if self.is_in_check(colour) {
@@ -371,8 +402,10 @@ impl Board {
         for piece in self.pieces_in_play.values() {
             if piece.colour == colour && piece.piece_type == PieceType::King {
                 king_position = piece.position;
+                break;
             }
         }
+        // println!("{} {}", king_position.row, king_position.column);
         king_position
     }
 
@@ -437,7 +470,7 @@ impl Board {
         let mut removed_piece: Option<Piece> = self
             .pieces_in_play
             .insert(piece_to_move.position, piece_to_move);
-        if self.move_was_en_passant(movement.new_position, old_position) {
+        if self.move_was_en_passant(movement.new_position, old_position, &removed_piece) {
             removed_piece = self.handle_en_passant(movement.new_position, old_position);
         }
         // if in check after move undo the move
@@ -507,6 +540,8 @@ impl Board {
         let mut king: Piece = self.pieces_in_play.remove(&king_position).unwrap();
         king.special = false;
         rook.special = false;
+        king.position = king_new_position;
+        rook.position = rook_new_position;
         self.pieces_in_play.insert(king_new_position, king);
         self.pieces_in_play.insert(rook_new_position, rook);
 

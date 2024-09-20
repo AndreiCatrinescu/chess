@@ -16,7 +16,7 @@ pub struct GameManager {
     black_timer: Arc<Timer>,
 }
 
-const GAME_TIME: u64 = 60 * 10;
+const GAME_TIME: u64 = 60 * 100;
 impl GameManager {
     pub fn new() -> Self {
         GameManager {
@@ -89,6 +89,7 @@ impl GameManager {
             GameManager::update_timer(w_timer_clone, b_timer_clone, turn_clone);
         });
         loop {
+            // self.board.test_positions();
             let turn_lock = self.turn.lock().unwrap();
             let mut turn = *turn_lock;
             drop(turn_lock);

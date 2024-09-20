@@ -1,6 +1,6 @@
 use crate::{board::board_columns, piece::PieceType};
 
-#[derive(PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(PartialEq, Eq, Clone, Copy, Hash, Debug)]
 pub struct Position {
     pub row: usize,
     pub column: usize,
@@ -73,17 +73,33 @@ impl Move {
             return Ok(Move::new(end_position, None, None, PieceType::Pawn));
         }
 
-        let piece_type: PieceType = match notation_elements[0].to_ascii_uppercase() {
+        let piece_type: PieceType = match notation_elements[0] {
             'R' => PieceType::Rook,
             'B' => PieceType::Bishop,
             'K' => PieceType::King,
             'N' => PieceType::Knight,
             'Q' => PieceType::Queen,
+            'a'..'h' => PieceType::Pawn,
             _ => return Err(NotationError::Invalid),
         };
 
         if notation_elements.len() == 3 {
-            return Ok(Move::new(end_position, None, None, piece_type));
+            if piece_type != PieceType::Pawn {
+                return Ok(Move::new(end_position, None, None, piece_type));
+            } else {
+                let starting_column = match notation_elements[0] {
+                    'a' => Some(board_columns::A),
+                    'b' => Some(board_columns::B),
+                    'c' => Some(board_columns::C),
+                    'd' => Some(board_columns::D),
+                    'e' => Some(board_columns::E),
+                    'f' => Some(board_columns::F),
+                    'g' => Some(board_columns::G),
+                    'h' => Some(board_columns::H),
+                    _ => return Err(NotationError::Invalid),
+                };
+                return Ok(Move::new(end_position, starting_column, None, piece_type));
+            }
         }
 
         if notation_elements.len() == 4 {
