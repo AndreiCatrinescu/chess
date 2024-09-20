@@ -9,6 +9,11 @@ use std::time::Instant;
 use std::{io, sync::Arc};
 use std::{io::Write, thread};
 use std::{sync::Mutex, time::Duration};
+
+const GAME_TIME: u64 = 60 * 10;
+const ESC: &str = "\x1B[";
+const PRECISION: Duration = Duration::from_millis(100);
+
 pub struct GameManager {
     board: Board,
     turn: Arc<Mutex<PieceColour>>,
@@ -16,7 +21,6 @@ pub struct GameManager {
     black_timer: Arc<Timer>,
 }
 
-const GAME_TIME: u64 = 60 * 100;
 impl GameManager {
     pub fn new() -> Self {
         GameManager {
@@ -32,8 +36,6 @@ impl GameManager {
         black_timer: Arc<Timer>,
         turn: Arc<Mutex<PieceColour>>,
     ) {
-        const ESC: &str = "\x1B[";
-        const PRECISION: Duration = Duration::from_millis(100);
         let mut start = Instant::now();
         loop {
             let end = Instant::now();
@@ -65,7 +67,7 @@ impl GameManager {
                     rem.as_secs() % 60,
                     (rem.as_millis() - (rem.as_secs() * 1000) as u128) / 100
                 );
-                print!("\x1B[u");
+                print!("{}u", ESC);
                 io::stdout().flush().unwrap();
                 start = end;
             }
@@ -172,8 +174,8 @@ impl GameManager {
     }
 
     fn print(&self) {
-        print!("\x1B[2J");
-        print!("\x1B[H");
+        print!("{}2J", ESC);
+        print!("{}H", ESC);
         let mut rem = self.black_timer.remaining_duration();
         println!(
             "{}:{}.{}",
@@ -181,10 +183,10 @@ impl GameManager {
             rem.as_secs() % 60,
             (rem.as_millis() - (rem.as_secs() * 1000) as u128) / 100
         );
-        print!("\x1B[1;0H");
+        print!("{}1;0H", ESC);
         self.board.print();
         rem = self.white_timer.remaining_duration();
-        print!("\x1B[13;0H");
+        print!("{}13;0H", ESC);
         io::stdout().flush().unwrap();
         println!(
             "{}:{}.{}",

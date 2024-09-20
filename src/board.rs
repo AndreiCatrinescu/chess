@@ -159,16 +159,6 @@ impl Board {
         }
 
         true
-        // self.validate_square(
-        //     Position::new(old_position.row, new_position.column),
-        //     self.pieces_in_play.get(&new_position).unwrap().colour,
-        // ) == SquareStatus::Capturable
-        //     || self
-        //         .pieces_in_play
-        //         .get(&Position::new(old_position.row, new_position.column))
-        //         .unwrap()
-        //         .colour
-        //         != self.pieces_in_play.get(&new_position).unwrap().colour
     }
 
     fn move_was_pawn_jump(
