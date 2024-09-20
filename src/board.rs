@@ -15,7 +15,7 @@ pub mod board_columns {
     pub const G: usize = 7;
     pub const H: usize = 8;
 }
-
+#[derive(PartialEq, Eq)]
 enum SquareStatus {
     Occupied,
     OutsideBounds,
@@ -133,12 +133,22 @@ impl Board {
         }
         ascii_graphic.push('\n');
 
-        println!("{}", ascii_graphic);
+        println!("\n{}", ascii_graphic);
     }
 
     fn move_was_en_passant(&self, new_position: Position, old_position: Position) -> bool {
         self.pieces_in_play.get(&new_position).unwrap().piece_type == PieceType::Pawn
             && new_position.column != old_position.column
+            && self
+                .pieces_in_play
+                .get(&Position::new(old_position.row, new_position.column))
+                .unwrap()
+                .colour
+                != self.pieces_in_play.get(&new_position).unwrap().colour
+            && self.validate_square(
+                Position::new(old_position.row, new_position.column),
+                PieceColour::Black,
+            ) == SquareStatus::Free
     }
 
     fn move_was_pawn_jump(
@@ -389,6 +399,8 @@ impl Board {
     }
 
     pub fn make_move(&mut self, colour: PieceColour, movement: &Move) -> MoveResult {
+        let started_in_check: bool = self.is_in_check(colour);
+
         // finds possible pieces to move
         let pieces: Vec<&Piece> =
             match self.find_moveable_pieces(movement.piece_type, colour, &movement) {
@@ -431,7 +443,11 @@ impl Board {
         // if in check after move undo the move
         if self.is_in_check(colour) {
             self.undo_move(movement.new_position, old_position, removed_piece);
-            return MoveResult::Checked;
+            if started_in_check || movement.piece_type == PieceType::King {
+                return MoveResult::Checked;
+            } else {
+                return MoveResult::PiecePinned;
+            }
         }
 
         // en passant no longer available
@@ -454,7 +470,7 @@ impl Board {
         }
 
         if self.is_promotion_available(colour, movement) {
-            MoveResult::PromotionAvailable
+            MoveResult::PromotionAvailable(movement.new_position)
         } else {
             MoveResult::Success
         }

@@ -138,9 +138,10 @@ impl Move {
 
 pub enum MoveResult {
     Success,
-    PromotionAvailable,
+    PromotionAvailable(Position),
     ImpossibleMove,
     Checked,
+    PiecePinned,
     AmbiguousMove,
     MissingPiece,
 }

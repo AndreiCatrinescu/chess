@@ -33,13 +33,19 @@ impl Piece {
         colour: PieceColour,
         special: bool,
     ) -> Piece {
-        let mut symbol: char = match piece_type {
-            PieceType::King => 'K',
-            PieceType::Bishop => 'B',
-            PieceType::Knight => 'N',
-            PieceType::Pawn => 'P',
-            PieceType::Queen => 'Q',
-            PieceType::Rook => 'R',
+        let mut symbol: char = match (piece_type, colour) {
+            (PieceType::King, PieceColour::Black) => '♔',
+            (PieceType::Bishop, PieceColour::Black) => '♗',
+            (PieceType::Knight, PieceColour::Black) => '♘',
+            (PieceType::Pawn, PieceColour::Black) => '♙',
+            (PieceType::Queen, PieceColour::Black) => '♕',
+            (PieceType::Rook, PieceColour::Black) => '♖',
+            (PieceType::King, PieceColour::White) => '♚',
+            (PieceType::Bishop, PieceColour::White) => '♝',
+            (PieceType::Knight, PieceColour::White) => '♞',
+            (PieceType::Pawn, PieceColour::White) => '♟',
+            (PieceType::Queen, PieceColour::White) => '♛',
+            (PieceType::Rook, PieceColour::White) => '♜',
         };
 
         if let PieceColour::Black = colour {
