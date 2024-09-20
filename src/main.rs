@@ -1,4 +1,3 @@
-use board::Board;
 use game::GameManager;
 mod board;
 mod game;
@@ -7,7 +6,6 @@ mod position;
 mod timer;
 
 fn main() {
-    let board: Board = Board::new();
-    let mut game: GameManager = GameManager::new(board);
+    let mut game: GameManager = GameManager::new();
     game.start_game();
 }

@@ -18,9 +18,9 @@ pub struct GameManager {
 
 const GAME_TIME: u64 = 60 * 10;
 impl GameManager {
-    pub fn new(board: Board) -> Self {
+    pub fn new() -> Self {
         GameManager {
-            board,
+            board: Board::new(),
             turn: Arc::new(Mutex::new(PieceColour::White)),
             white_timer: Arc::new(Timer::new(GAME_TIME)),
             black_timer: Arc::new(Timer::new(GAME_TIME)),
