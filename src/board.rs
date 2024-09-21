@@ -30,7 +30,10 @@ pub enum CastleDirection {
 
 pub struct Board {
     pieces_in_play: HashMap<Position, Piece>,
+    move_to_draw_counter: i32,
 }
+
+const DRAW_MOVE_LIMIT: i32 = 50 * 2;
 
 impl Board {
     pub fn test_positions(&self) {
@@ -95,7 +98,10 @@ impl Board {
             pieces_in_play.insert(new_black_position, new_black_pawn);
         }
 
-        Board { pieces_in_play }
+        Board {
+            pieces_in_play,
+            move_to_draw_counter: 0,
+        }
     }
 
     pub fn print(&self) {
@@ -176,15 +182,14 @@ impl Board {
         }
     }
 
-    fn find_moveable_pieces(
+    fn possible_pieces_for_move(
         &self,
-        piece_type: PieceType,
         colour: PieceColour,
         movement: &Move,
     ) -> Option<Vec<&Piece>> {
         let mut pieces: Vec<&Piece> = Vec::new();
         for piece in self.pieces_in_play.values() {
-            if piece.colour != colour || piece.piece_type != piece_type {
+            if piece.colour != colour || piece.piece_type != movement.piece_type {
                 continue;
             }
 
@@ -239,7 +244,6 @@ impl Board {
             return false;
         }
 
-        //rook is good
         let rook_position: Position = match (&direction, colour) {
             (CastleDirection::KingSide, PieceColour::White) => Position::new(1, board_columns::H),
             (CastleDirection::KingSide, PieceColour::Black) => Position::new(8, board_columns::H),
@@ -335,7 +339,6 @@ impl Board {
         true
     }
 
-    // ? hope it works
     pub fn is_mate(&mut self, player: PieceColour) -> bool {
         if !self.is_in_check(player) {
             return false;
@@ -395,7 +398,6 @@ impl Board {
                 break;
             }
         }
-        // println!("{} {}", king_position.row, king_position.column);
         king_position
     }
 
@@ -424,12 +426,10 @@ impl Board {
     pub fn make_move(&mut self, colour: PieceColour, movement: &Move) -> MoveResult {
         let started_in_check: bool = self.is_in_check(colour);
 
-        // finds possible pieces to move
-        let pieces: Vec<&Piece> =
-            match self.find_moveable_pieces(movement.piece_type, colour, &movement) {
-                Some(p) => p,
-                None => return MoveResult::MissingPiece,
-            };
+        let pieces: Vec<&Piece> = match self.possible_pieces_for_move(colour, &movement) {
+            Some(p) => p,
+            None => return MoveResult::MissingPiece,
+        };
 
         let mut found: bool = false;
         let mut piece_to_move: &Piece = pieces[0];
@@ -492,8 +492,18 @@ impl Board {
                 .special = false;
         }
 
+        if let Some(_) = removed_piece {
+            self.move_to_draw_counter = 0;
+        } else if movement.piece_type == PieceType::Pawn {
+            self.move_to_draw_counter = 0;
+        } else {
+            self.move_to_draw_counter += 1;
+        }
+
         if self.is_promotion_available(colour, movement) {
             MoveResult::PromotionAvailable(movement.new_position)
+        } else if self.move_to_draw_counter == DRAW_MOVE_LIMIT {
+            MoveResult::Draw
         } else {
             MoveResult::Success
         }

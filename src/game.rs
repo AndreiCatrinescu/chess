@@ -46,6 +46,9 @@ impl GameManager {
                 match *current_turn {
                     PieceColour::White => {
                         if white_timer.is_finished() {
+                            print!("{}0G", ESC);
+                            io::stdout().flush().unwrap();
+                            println!("White ran out of time");
                             break;
                         }
                         print!("{}13;0H", ESC);
@@ -53,6 +56,9 @@ impl GameManager {
                     }
                     PieceColour::Black => {
                         if black_timer.is_finished() {
+                            print!("{}0G", ESC);
+                            io::stdout().flush().unwrap();
+                            println!("Black ran out of time");
                             break;
                         }
                         print!("{}H", ESC);
@@ -95,7 +101,10 @@ impl GameManager {
             let turn_lock = self.turn.lock().unwrap();
             let mut turn = *turn_lock;
             drop(turn_lock);
+            print!("{}14;0H", ESC);
             println!("your move:");
+            print!("{}2K", ESC);
+            io::stdout().flush().unwrap();
             move_notation.clear();
             input.read_line(&mut move_notation).unwrap();
             move_notation = move_notation.trim().to_string();
@@ -103,7 +112,19 @@ impl GameManager {
                 move_result = self.board.castle(turn, CastleDirection::KingSide);
             } else if move_notation.to_ascii_lowercase() == "o-o-o" {
                 move_result = self.board.castle(turn, CastleDirection::QueenSide);
-            } else if move_notation.to_ascii_lowercase() == "exit" {
+            } else if move_notation.to_ascii_lowercase() == "resign" {
+                self.white_timer.pause();
+                self.black_timer.pause();
+                match turn {
+                    PieceColour::White => println!("Black won"),
+                    PieceColour::Black => println!("White won"),
+                }
+                break;
+            } else if move_notation.to_ascii_lowercase() == "draw" {
+                self.white_timer.pause();
+                self.black_timer.pause();
+                self.print();
+                println!("Draw");
                 break;
             } else {
                 movement = match Move::from_notation(&move_notation) {
@@ -122,20 +143,25 @@ impl GameManager {
                     continue;
                 }
                 MoveResult::Checked => {
-                    println!("cannot make this move due to check");
+                    println!("Cannot make this move due to check");
                     continue;
                 }
                 MoveResult::ImpossibleMove => {
-                    println!("this move is not legal");
+                    println!("This move is not legal");
                     continue;
                 }
                 MoveResult::MissingPiece => {
-                    println!("no piece can make this move");
+                    println!("No piece can make this move");
                     continue;
                 }
                 MoveResult::PiecePinned => {
-                    println!("this piece is pinned");
+                    println!("This piece is pinned");
                     continue;
+                }
+                MoveResult::Draw => {
+                    self.print();
+                    println!("Draw");
+                    break;
                 }
                 MoveResult::PromotionAvailable(square) => self.handle_promotion(turn, square),
                 MoveResult::Success => (),
@@ -160,13 +186,18 @@ impl GameManager {
 
             if self.board.is_stalemate(turn) {
                 self.print();
-                println!("stalemate");
+                println!("Stalemate");
                 break;
             }
 
             if self.board.is_mate(turn) {
+                self.white_timer.pause();
+                self.black_timer.pause();
                 self.print();
-                println!("mate");
+                match turn {
+                    PieceColour::White => println!("Black won"),
+                    PieceColour::Black => println!("White won"),
+                }
                 break;
             }
             self.print();

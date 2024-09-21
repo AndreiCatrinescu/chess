@@ -155,4 +155,5 @@ pub enum MoveResult {
     PiecePinned,
     AmbiguousMove,
     MissingPiece,
+    Draw,
 }
