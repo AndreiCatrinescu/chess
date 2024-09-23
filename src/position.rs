@@ -74,7 +74,7 @@ impl Move {
             'K' => PieceType::King,
             'N' => PieceType::Knight,
             'Q' => PieceType::Queen,
-            'a'..'h' => PieceType::Pawn,
+            'a'..='h' => PieceType::Pawn,
             _ => return Err(NotationError),
         };
 
