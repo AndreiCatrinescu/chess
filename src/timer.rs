@@ -25,6 +25,7 @@ impl Timer {
         self.start.lock().unwrap().clone()
     }
 
+    #[allow(dead_code)]
     pub fn is_running(&self) -> bool {
         !self.is_finished() && !*self.paused.lock().unwrap()
     }

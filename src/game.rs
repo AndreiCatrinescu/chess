@@ -10,7 +10,6 @@ use std::{io, sync::Arc};
 use std::{io::Write, thread};
 use std::{sync::Mutex, time::Duration};
 
-const GAME_TIME: u64 = 60 * 10;
 const ESC: &str = "\x1B[";
 const PRECISION: Duration = Duration::from_millis(100);
 
@@ -22,12 +21,12 @@ pub struct GameManager {
 }
 
 impl GameManager {
-    pub fn new() -> Self {
+    pub fn new(minutes: u64) -> Self {
         GameManager {
             board: Board::new(),
             turn: Arc::new(Mutex::new(PieceColour::White)),
-            white_timer: Arc::new(Timer::new(GAME_TIME)),
-            black_timer: Arc::new(Timer::new(GAME_TIME)),
+            white_timer: Arc::new(Timer::new(minutes * 60)),
+            black_timer: Arc::new(Timer::new(minutes * 60)),
         }
     }
 
@@ -46,7 +45,7 @@ impl GameManager {
                 match *current_turn {
                     PieceColour::White => {
                         if white_timer.is_finished() {
-                            print!("{}0G", ESC);
+                            print!("{}1E", ESC);
                             io::stdout().flush().unwrap();
                             println!("White ran out of time");
                             break;
@@ -56,7 +55,7 @@ impl GameManager {
                     }
                     PieceColour::Black => {
                         if black_timer.is_finished() {
-                            print!("{}0G", ESC);
+                            print!("{}1E", ESC);
                             io::stdout().flush().unwrap();
                             println!("Black ran out of time");
                             break;
@@ -97,7 +96,6 @@ impl GameManager {
             GameManager::update_timer(w_timer_clone, b_timer_clone, turn_clone);
         });
         loop {
-            // self.board.test_positions();
             let turn_lock = self.turn.lock().unwrap();
             let mut turn = *turn_lock;
             drop(turn_lock);
@@ -115,6 +113,8 @@ impl GameManager {
             } else if move_notation.to_ascii_lowercase() == "resign" {
                 self.white_timer.pause();
                 self.black_timer.pause();
+                print!("{}2K", ESC);
+                io::stdout().flush().unwrap();
                 match turn {
                     PieceColour::White => println!("Black won"),
                     PieceColour::Black => println!("White won"),
@@ -123,14 +123,16 @@ impl GameManager {
             } else if move_notation.to_ascii_lowercase() == "draw" {
                 self.white_timer.pause();
                 self.black_timer.pause();
-                self.print();
+                print!("{}2K", ESC);
+                io::stdout().flush().unwrap();
                 println!("Draw");
                 break;
             } else {
                 movement = match Move::from_notation(&move_notation) {
                     Ok(movement) => movement,
                     Err(_) => {
-                        println!("notation is invalid");
+                        print!("{}2K", ESC);
+                        println!("Notation is invalid");
                         continue;
                     }
                 };
@@ -139,22 +141,27 @@ impl GameManager {
 
             match move_result {
                 MoveResult::AmbiguousMove => {
-                    println!("multiple pieces can make this move, consider specifying the starting row or column");
+                    print!("{}2K", ESC);
+                    println!("Multiple pieces can make this move, consider specifying the starting row or column");
                     continue;
                 }
                 MoveResult::Checked => {
+                    print!("{}2K", ESC);
                     println!("Cannot make this move due to check");
                     continue;
                 }
                 MoveResult::ImpossibleMove => {
+                    print!("{}2K", ESC);
                     println!("This move is not legal");
                     continue;
                 }
                 MoveResult::MissingPiece => {
+                    print!("{}2K", ESC);
                     println!("No piece can make this move");
                     continue;
                 }
                 MoveResult::PiecePinned => {
+                    print!("{}2K", ESC);
                     println!("This piece is pinned");
                     continue;
                 }
@@ -242,7 +249,10 @@ impl GameManager {
                 'n' | 'k' => PieceType::Knight,
                 'b' => PieceType::Bishop,
                 _ => {
-                    println!("no :)");
+                    print!("Invalid piece symbol");
+                    print!("{}1F", ESC);
+                    print!("{}2K", ESC);
+                    io::stdout().flush().unwrap();
                     continue;
                 }
             };

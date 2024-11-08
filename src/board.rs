@@ -36,12 +36,6 @@ pub struct Board {
 const DRAW_MOVE_LIMIT: i32 = 50 * 2;
 
 impl Board {
-    pub fn test_positions(&self) {
-        for (pos, piece) in &self.pieces_in_play {
-            assert_eq!(*pos, piece.position);
-        }
-    }
-
     pub fn new() -> Self {
         let back_types: [PieceType; 8] = [
             PieceType::Rook,
@@ -182,37 +176,36 @@ impl Board {
         }
     }
 
-    fn possible_pieces_for_move(
+    fn pieces_with_legal_moves<'a>(
         &self,
-        colour: PieceColour,
+        pieces: Vec<&'a Piece>,
         movement: &Move,
-    ) -> Option<Vec<&Piece>> {
-        let mut pieces: Vec<&Piece> = Vec::new();
-        for piece in self.pieces_in_play.values() {
-            if piece.colour != colour || piece.piece_type != movement.piece_type {
-                continue;
-            }
+    ) -> Vec<&'a Piece> {
+        let legal_pieces: Vec<&Piece> = pieces
+            .into_iter()
+            .filter(|p| self.find_moves(&p).contains(&movement.new_position))
+            .collect();
 
-            let is_on_starting_position: bool =
-                match (movement.starting_column, movement.starting_row) {
-                    (Some(column), Some(row)) => piece.position == Position::new(row, column),
-                    (Some(column), None) => piece.position.column == column,
-                    (None, Some(row)) => piece.position.row == row,
-                    (None, None) => true,
-                };
+        legal_pieces
+    }
 
-            if !is_on_starting_position {
-                continue;
-            }
-
-            pieces.push(piece);
-        }
-
-        if pieces.is_empty() {
-            None
-        } else {
-            Some(pieces)
-        }
+    fn possible_pieces_for_move(&self, colour: PieceColour, movement: &Move) -> Vec<&Piece> {
+        let pieces: Vec<&Piece> = self
+            .pieces_in_play
+            .values()
+            .filter(|p| p.colour == colour && p.piece_type == movement.piece_type)
+            .filter(|p| {
+                movement
+                    .starting_column
+                    .is_none_or(|column| p.position.column == column)
+            })
+            .filter(|p| {
+                movement
+                    .starting_row
+                    .is_none_or(|row| p.position.row == row)
+            })
+            .collect();
+        pieces
     }
 
     fn undo_move(
@@ -378,11 +371,8 @@ impl Board {
         let mut valid: bool = true;
         let mut piece_to_move: Piece = self.pieces_in_play.remove(&old_position).unwrap();
         piece_to_move.position = new_position;
-        let mut removed_piece: Option<Piece> =
-            self.pieces_in_play.insert(new_position, piece_to_move);
-        if self.move_was_en_passant(new_position, old_position, &removed_piece) {
-            removed_piece = self.handle_en_passant(new_position, old_position);
-        }
+        let removed_piece: Option<Piece> =
+            self.handle_capture(new_position, old_position, piece_to_move);
         if self.is_in_check(colour) {
             valid = false;
         }
@@ -426,30 +416,21 @@ impl Board {
     pub fn make_move(&mut self, colour: PieceColour, movement: &Move) -> MoveResult {
         let started_in_check: bool = self.is_in_check(colour);
 
-        let pieces: Vec<&Piece> = match self.possible_pieces_for_move(colour, &movement) {
-            Some(p) => p,
-            None => return MoveResult::MissingPiece,
-        };
+        let pieces: Vec<&Piece> = self.possible_pieces_for_move(colour, &movement);
 
-        let mut found: bool = false;
-        let mut piece_to_move: &Piece = pieces[0];
-
-        // checks if exactly one piece can be moved and gets that piece
-        for piece in pieces {
-            let moves: Vec<Position> = self.find_moves(piece);
-            if !moves.contains(&movement.new_position) {
-                continue;
-            }
-            if found {
-                return MoveResult::AmbiguousMove;
-            }
-            found = true;
-            piece_to_move = piece;
+        if pieces.is_empty() {
+            return MoveResult::MissingPiece;
         }
 
-        if found == false {
+        let pieces = self.pieces_with_legal_moves(pieces, &movement);
+
+        let piece_to_move: &Piece = if pieces.len() == 1 {
+            pieces.first().unwrap()
+        } else if pieces.len() > 1 {
+            return MoveResult::AmbiguousMove;
+        } else {
             return MoveResult::ImpossibleMove;
-        }
+        };
 
         let old_position: Position = piece_to_move.position;
         // pulls piece from its old position
@@ -457,12 +438,9 @@ impl Board {
         // update its position
         piece_to_move.position = movement.new_position;
         // get the captured piece if any and puts piece on teh new position
-        let mut removed_piece: Option<Piece> = self
-            .pieces_in_play
-            .insert(piece_to_move.position, piece_to_move);
-        if self.move_was_en_passant(movement.new_position, old_position, &removed_piece) {
-            removed_piece = self.handle_en_passant(movement.new_position, old_position);
-        }
+        let removed_piece: Option<Piece> =
+            self.handle_capture(movement.new_position, old_position, piece_to_move);
+
         // if in check after move undo the move
         if self.is_in_check(colour) {
             self.undo_move(movement.new_position, old_position, removed_piece);
@@ -473,25 +451,28 @@ impl Board {
             }
         }
 
-        // en passant no longer available
+        // en passant no longer available for any pawn that has jumped last move
         for piece in self.pieces_in_play.values_mut() {
             if piece.piece_type == PieceType::Pawn {
                 piece.special = false;
             }
         }
 
+        // en passant available on the pawn that jumped this move
         if self.move_was_pawn_jump(movement.new_position, old_position, colour) {
             self.pieces_in_play
                 .get_mut(&movement.new_position)
                 .unwrap()
                 .special = true;
         } else {
+            // if piece was not a pawn that jumped turn off special in case it was a king or rook so it can no longer castle
             self.pieces_in_play
                 .get_mut(&movement.new_position)
                 .unwrap()
                 .special = false;
         }
 
+        // 50 move rule shenanigans
         if let Some(_) = removed_piece {
             self.move_to_draw_counter = 0;
         } else if movement.piece_type == PieceType::Pawn {
@@ -565,6 +546,20 @@ impl Board {
                 .remove(&Position::new(old_position.row, new_position.column));
         }
         captured_pawn
+    }
+
+    fn handle_capture(
+        &mut self,
+        new_position: Position,
+        old_position: Position,
+        piece_to_move: Piece,
+    ) -> Option<Piece> {
+        let mut removed_piece: Option<Piece> =
+            self.pieces_in_play.insert(new_position, piece_to_move);
+        if self.move_was_en_passant(new_position, old_position, &removed_piece) {
+            removed_piece = self.handle_en_passant(new_position, old_position);
+        }
+        removed_piece
     }
 
     fn find_moves(&self, piece: &Piece) -> Vec<Position> {
